@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Visitor Analytics Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh}
+header{background:#1a1d27;border-bottom:1px solid #2d3748;padding:16px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+header h1{font-size:1.4rem;font-weight:700;color:#fff;margin-right:auto}
+select,button{background:#2d3748;color:#e2e8f0;border:1px solid #4a5568;border-radius:6px;padding:8px 14px;cursor:pointer;font-size:0.85rem}
+button:hover{background:#4a5568}
+button.active{background:#667eea;border-color:#667eea}
+.container{padding:24px;max-width:1400px;margin:0 auto}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:#1a1d27;border:1px solid #2d3748;border-radius:12px;padding:20px}
+.stat-card .label{font-size:0.78rem;color:#718096;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.stat-card .value{font-size:2rem;font-weight:700;color:#fff}
+.stat-card .value.live{color:#48bb78}
+.stat-card .value.conversion{color:#667eea}
+.chart-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:24px}
+.chart-card{background:#1a1d27;border:1px solid #2d3748;border-radius:12px;padding:20px}
+.chart-card h3{font-size:0.9rem;color:#a0aec0;margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em}
+.chart-full{grid-column:1/-1}
+.tabs{display:flex;gap:8px;margin-bottom:20px;border-bottom:1px solid #2d3748;padding-bottom:12px}
+.tab{background:none;border:none;color:#718096;padding:8px 16px;cursor:pointer;font-size:0.9rem;border-radius:6px}
+.tab.active{background:#667eea22;color:#667eea}
+.tab-content{display:none}
+.tab-content.active{display:block}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:10px 12px;font-size:0.75rem;color:#718096;text-transform:uppercase;border-bottom:1px solid #2d3748}
+td{padding:10px 12px;font-size:0.85rem;border-bottom:1px solid #1e2330}
+tr:hover td{background:#1e2330}
+.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600}
+.badge-mobile{background:#2d3748;color:#90cdf4}
+.badge-desktop{background:#2d3748;color:#9ae6b4}
+.badge-tablet{background:#2d3748;color:#fbd38d}
+.session-row{cursor:pointer}
+.session-details{display:none;background:#0f1117;padding:12px}
+.session-details.open{display:block}
+.page-path{color:#667eea;font-family:monospace;font-size:0.8rem}
+.live-dot{width:8px;height:8px;background:#48bb78;border-radius:50%;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.empty{text-align:center;padding:48px;color:#4a5568}
+.sources-list{list-style:none}
+.sources-list li{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #2d3748}
+.bar-wrap{height:6px;background:#2d3748;border-radius:3px;flex:1;margin:0 12px}
+.bar-fill{height:100%;background:#667eea;border-radius:3px;transition:width .5s}
+.exclude-section{margin-top:8px;display:flex;gap:8px}
+.btn-exclude{background:#e53e3e22;border-color:#e53e3e44;color:#fc8181}
+.btn-include{background:#38a16922;border-color:#38a16944;color:#68d391}
+</style>
+</head>
+<body>
+<header>
+  <h1>&#128202; Visitor Analytics</h1>
+  <select id="storeSelect">
+    <option value="all">All Stores</option>
+    <option value="yourwallarts">Yourwallarts</option>
+    <option value="vp3fp7-iz">Store 2 (vp3fp7-iz)</option>
+  </select>
+  <select id="daysSelect">
+    <option value="1">Last 24h</option>
+    <option value="7" selected>Last 7 days</option>
+    <option value="30">Last 30 days</option>
+    <option value="90">Last 90 days</option>
+  </select>
+  <div class="exclude-section">
+    <button class="btn-exclude" onclick="setExclude(true)">&#128683; Exclude My Visits</button>
+    <button class="btn-include" onclick="setExclude(false)">&#9989; Remove Exclusion</button>
+  </div>
+  <span id="refreshTimer" style="color:#4a5568;font-size:0.8rem"></span>
+</header>
+<div class="container">
+  <div class="stat-grid">
+    <div class="stat-card"><div class="label"><span class="live-dot"></span> Live Visitors</div><div class="value live" id="statLive">-</div></div>
+    <div class="stat-card"><div class="label">Total Visitors</div><div class="value" id="statTotal">-</div></div>
+    <div class="stat-card"><div class="label">Conversions</div><div class="value conversion" id="statConv">-</div></div>
+    <div class="stat-card"><div class="label">Conversion Rate</div><div class="value" id="statConvRate">-</div></div>
+    <div class="stat-card"><div class="label">Bounce Rate</div><div class="value" id="statBounce">-</div></div>
+    <div class="stat-card"><div class="label">Avg Bounce Time</div><div class="value" id="statBounceTime">-</div></div>
+    <div class="stat-card"><div class="label">Avg Time on Site</div><div class="value" id="statAvgTime">-</div></div>
+    <div class="stat-card"><div class="label">Pages per Visit</div><div class="value" id="statPPV">-</div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card chart-full"><h3>Daily Visitors &amp; Conversions</h3><canvas id="dailyChart" height="80"></canvas></div>
+    <div class="chart-card"><h3>Conversion Funnel</h3><canvas id="funnelChart" height="160"></canvas></div>
+    <div class="chart-card"><h3>Device Breakdown</h3><canvas id="deviceChart" height="160"></canvas></div>
+  </div>
+  <div class="chart-grid">
+    <div class="chart-card"><h3>Top Countries</h3><div id="countriesTable"></div></div>
+    <div class="chart-card"><h3>Traffic Sources</h3><ul class="sources-list" id="sourcesList"></ul></div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('live')">&#128310; Live</button>
+    <button class="tab" onclick="switchTab('sessions')">&#128196; Sessions</button>
+    <button class="tab" onclick="switchTab('pages')">&#128218; Pages</button>
+  </div>
+  <div id="tab-live" class="tab-content active">
+    <div id="liveTable"></div>
+  </div>
+  <div id="tab-sessions" class="tab-content">
+    <div id="sessionsTable"></div>
+  </div>
+  <div id="tab-pages" class="tab-content">
+    <div id="pagesTable"></div>
+  </div>
+</div>
+<script>
+const API = '';
+let dailyChart, funnelChart, deviceChart;
+let countdown = 30;
+
+function getStore(){ return document.getElementById('storeSelect').value; }
+function getDays(){ return document.getElementById('daysSelect').value; }
+
+function fmt(n){ if(n===undefined||n===null)return '-'; if(n>=1000)return (n/1000).toFixed(1)+'k'; return n.toString(); }
+function fmtSec(s){ if(!s)return '0s'; if(s<60)return s+'s'; return Math.floor(s/60)+'m '+( s%60)+'s'; }
+function fmtTime(ts){ return new Date(ts).toLocaleString(); }
+
+async function loadStats(){
+  try{
+    const r = await fetch(API+'/api/analytics/stats?days='+getDays()+'&store='+getStore());
+    const d = await r.json();
+    document.getElementById('statLive').textContent = d.liveVisitors??0;
+    document.getElementById('statTotal').textContent = fmt(d.totalVisitors);
+    document.getElementById('statConv').textContent = fmt(d.conversions);
+    document.getElementById('statConvRate').textContent = d.conversionRate+'%';
+    document.getElementById('statBounce').textContent = d.bounceRate+'%';
+    document.getElementById('statBounceTime').textContent = fmtSec(d.avgBounceTime);
+    document.getElementById('statAvgTime').textContent = fmtSec(d.avgTimeOnSite);
+    document.getElementById('statPPV').textContent = d.pagesPerVisit;
+    renderDailyChart(d.daily||[]);
+    renderFunnelChart(d.funnel||{});
+    renderDeviceChart(d.devices||{});
+    renderCountries(d.countries||[]);
+    renderSources(d.sources||[]);
+  }catch(e){console.error(e);}
+}
+
+function renderDailyChart(data){
+  const ctx = document.getElementById('dailyChart').getContext('2d');
+  if(dailyChart) dailyChart.destroy();
+  dailyChart = new Chart(ctx,{type:'line',data:{labels:data.map(d=>d.date),datasets:[{label:'Visitors',data:data.map(d=>d.visitors),borderColor:'#667eea',backgroundColor:'#667eea22',tension:.3,fill:true},{label:'Conversions',data:data.map(d=>d.conversions),borderColor:'#48bb78',backgroundColor:'#48bb7822',tension:.3,fill:true}]},options:{responsive:true,plugins:{legend:{labels:{color:'#a0aec0'}}},scales:{x:{ticks:{color:'#718096'},grid:{color:'#2d3748'}},y:{ticks:{color:'#718096'},grid:{color:'#2d3748'},beginAtZero:true}}}});
+}
+
+function renderFunnelChart(f){
+  const ctx = document.getElementById('funnelChart').getContext('2d');
+  if(funnelChart) funnelChart.destroy();
+  funnelChart = new Chart(ctx,{type:'bar',data:{labels:['Product Views','Cart Views','Checkout Started','Orders Completed'],datasets:[{data:[f.productViews||0,f.cartViews||0,f.checkoutStarted||0,f.ordersCompleted||0],backgroundColor:['#667eea','#805ad5','#d69e2e','#48bb78']}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#718096'},grid:{color:'#2d3748'},beginAtZero:true},y:{ticks:{color:'#a0aec0'},grid:{color:'#2d3748'}}}}});
+}
+
+function renderDeviceChart(d){
+  const ctx = document.getElementById('deviceChart').getContext('2d');
+  if(deviceChart) deviceChart.destroy();
+  deviceChart = new Chart(ctx,{type:'doughnut',data:{labels:['Mobile','Desktop','Tablet','Unknown'],datasets:[{data:[d.mobile||0,d.desktop||0,d.tablet||0,d.unknown||0],backgroundColor:['#667eea','#48bb78','#d69e2e','#4a5568']}]},options:{responsive:true,plugins:{legend:{labels:{color:'#a0aec0'}}}}});
+}
+
+function renderCountries(countries){
+  if(!countries.length){document.getElementById('countriesTable').innerHTML='<div class="empty">No data</div>';return;}
+  let html='<table><thead><tr><th>Country</th><th>Visitors</th><th>Conversions</th><th>Conv Rate</th></tr></thead><tbody>';
+  countries.forEach(c=>{
+    const rate = c.visitors>0?((c.conversions/c.visitors)*100).toFixed(1):'0.0';
+    html+=`<tr><td>${c.country}</td><td>${fmt(c.visitors)}</td><td>${fmt(c.conversions)}</td><td>${rate}%</td></tr>`;
+  });
+  html+='</tbody></table>';
+  document.getElementById('countriesTable').innerHTML=html;
+}
+
+function renderSources(sources){
+  if(!sources.length){document.getElementById('sourcesList').innerHTML='<li class="empty">No data</li>';return;}
+  const max = sources[0]?.count||1;
+  let html='';
+  sources.forEach(s=>{
+    const pct=Math.round((s.count/max)*100);
+    html+=`<li><span style="color:#a0aec0;font-size:.85rem">${s.source}</span><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%"></div></div><span style="color:#fff;font-weight:600">${s.count}</span></li>`;
+  });
+  document.getElementById('sourcesList').innerHTML=html;
+}
+
+async function loadLive(){
+  try{
+    const r = await fetch(API+'/api/analytics/realtime?store='+getStore());
+    const d = await r.json();
+    if(!d.length){document.getElementById('liveTable').innerHTML='<div class="empty">No active visitors right now</div>';return;}
+    let html='<table><thead><tr><th>Session</th><th>Current Page</th><th>Device</th><th>Country</th><th>Store</th><th>Time on Site</th></tr></thead><tbody>';
+    d.forEach(s=>{
+      const dur=Math.round((Date.now()-s.startTime)/1000);
+      html+=`<tr><td style="font-family:monospace;color:#667eea">${s.sessionId.substring(0,8)}...</td><td class="page-path">${s.currentPage}</td><td><span class="badge badge-${s.device}">${s.device}</span></td><td>${s.country}</td><td style="font-size:.8rem">${s.store}</td><td>${fmtSec(dur)}</td></tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('liveTable').innerHTML=html;
+  }catch(e){}
+}
+
+async function loadSessions(){
+  try{
+    const r = await fetch(API+'/api/analytics/sessions?store='+getStore()+'&limit=100');
+    const d = await r.json();
+    if(!d.length){document.getElementById('sessionsTable').innerHTML='<div class="empty">No sessions yet</div>';return;}
+    let html='<table><thead><tr><th>Session ID</th><th>Started</th><th>Device</th><th>Country</th><th>Pages</th><th>Time</th><th>Status</th></tr></thead><tbody>';
+    d.forEach((s,i)=>{
+      const status = s.converted?'<span style="color:#48bb78">Converted</span>':s.bounced?'<span style="color:#fc8181">Bounced</span>':'<span style="color:#d69e2e">Browsing</span>';
+      html+=`<tr class="session-row" onclick="toggleSession(${i})"><td style="font-family:monospace;color:#667eea">${s.sessionId.substring(0,12)}...</td><td style="font-size:.8rem">${fmtTime(s.startTime)}</td><td><span class="badge badge-${s.device}">${s.device}</span></td><td>${s.country}</td><td>${s.pageviews||s.pages.length}</td><td>${fmtSec(s.totalTime)}</td><td>${status}</td></tr>`;
+      html+=`<tr><td colspan="7" style="padding:0"><div class="session-details" id="sd${i}">`;
+      s.pages.forEach(p=>{html+=`<span class="page-path">${p}</span> &rarr; `;});
+      html+=`<br><small style="color:#718096">Referrer: ${s.referrer||'direct'} | Store: ${s.store}</small></div></td></tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('sessionsTable').innerHTML=html;
+  }catch(e){}
+}
+
+function toggleSession(i){
+  const el=document.getElementById('sd'+i);
+  if(el)el.classList.toggle('open');
+}
+
+async function loadPages(){
+  try{
+    const r = await fetch(API+'/api/analytics/pages?store='+getStore()+'&days='+getDays());
+    const d = await r.json();
+    if(!d.length){document.getElementById('pagesTable').innerHTML='<div class="empty">No page data yet</div>';return;}
+    let html='<table><thead><tr><th>Page</th><th>Views</th><th>Avg Scroll %</th></tr></thead><tbody>';
+    d.forEach(p=>{
+      html+=`<tr><td class="page-path">${p.page}</td><td>${fmt(p.views)}</td><td>${p.avgScroll}%</td></tr>`;
+    });
+    html+='</tbody></table>';
+    document.getElementById('pagesTable').innerHTML=html;
+  }catch(e){}
+}
+
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if(name==='live')loadLive();
+  else if(name==='sessions')loadSessions();
+  else if(name==='pages')loadPages();
+}
+
+async function setExclude(exclude){
+  const action = exclude?'set':'remove';
+  try{
+    const r=await fetch(API+'/api/track/exclude?action='+action);
+    const d=await r.json();
+    alert(d.excluded?'Your visits will now be excluded from tracking.':'Exclusion removed. Your visits will be tracked.');
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function refresh(){
+  await loadStats();
+  const activeTab=document.querySelector('.tab.active');
+  if(activeTab){
+    const tabName=activeTab.textContent.trim().replace(/[^ ]+/,'').trim();
+    if(document.getElementById('tab-live').classList.contains('active'))loadLive();
+    else if(document.getElementById('tab-sessions').classList.contains('active'))loadSessions();
+    else if(document.getElementById('tab-pages').classList.contains('active'))loadPages();
+  }
+}
+
+function startTimer(){
+  setInterval(()=>{
+    countdown--;
+    document.getElementById('refreshTimer').textContent='Refreshing in '+countdown+'s';
+    if(countdown<=0){countdown=30;refresh();}
+  },1000);
+}
+
+document.getElementById('storeSelect').addEventListener('change',()=>{refresh();});
+document.getElementById('daysSelect').addEventListener('change',()=>{loadStats();});
+
+refresh();
+loadLive();
+startTimer();
+</script>
+</body>
+</html>
