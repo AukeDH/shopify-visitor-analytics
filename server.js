@@ -4,6 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,18 +34,49 @@ function purgeOld(data) {
   return data;
 }
 
-app.post('/api/track', (req, res) => {
+function getCountry(ip) {
+  return new Promise((resolve) => {
+    if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+      return resolve('XX');
+    }
+    const url = `http://ip-api.com/json/${ip}?fields=countryCode`;
+    https.get(url.replace('http://', 'http://').replace('https://', 'https://'), (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          resolve(json.countryCode || 'XX');
+        } catch(e) { resolve('XX'); }
+      });
+    }).on('error', () => resolve('XX'));
+  });
+}
+
+function getIP(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (forwarded) return forwarded.split(',')[0].trim();
+  return req.headers['cf-connecting-ip'] || req.socket.remoteAddress || '0.0.0.0';
+}
+
+app.post('/api/track', async (req, res) => {
   try {
     const { sessionId, eventType, page, scrollDepth, referrer, device, store, totalTime, timestamp } = req.body;
     if (!sessionId || !eventType) return res.status(200).json({ ok: true });
     const data = purgeOld(loadData());
     const now = Date.now();
     if (!data.sessions[sessionId]) {
+      const cfCountry = req.headers['cf-ipcountry'];
+      let country = cfCountry && cfCountry !== 'XX' ? cfCountry : null;
+      if (!country) {
+        const ip = getIP(req);
+        country = await getCountry(ip);
+      }
       data.sessions[sessionId] = {
         sessionId, startTime: timestamp || now, lastHeartbeat: now,
         pages: [], scrollDepths: {}, referrer: referrer || '', device: device || 'unknown',
         converted: false, bounced: true, totalTime: 0,
-        country: req.headers['cf-ipcountry'] || 'XX',
+        country: country || 'XX',
         store: store || 'unknown', conversionType: null, pageviews: 0
       };
     }
