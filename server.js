@@ -4,7 +4,7 @@ const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
+const http = require('http');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -39,8 +39,13 @@ function getCountry(ip) {
     if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
       return resolve('XX');
     }
-    const url = `http://ip-api.com/json/${ip}?fields=countryCode`;
-    https.get(url.replace('http://', 'http://').replace('https://', 'https://'), (res) => {
+    const options = {
+      hostname: 'ip-api.com',
+      path: '/json/' + ip + '?fields=countryCode',
+      method: 'GET',
+      timeout: 3000
+    };
+    const req = http.request(options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -49,7 +54,10 @@ function getCountry(ip) {
           resolve(json.countryCode || 'XX');
         } catch(e) { resolve('XX'); }
       });
-    }).on('error', () => resolve('XX'));
+    });
+    req.on('error', () => resolve('XX'));
+    req.on('timeout', () => { req.destroy(); resolve('XX'); });
+    req.end();
   });
 }
 
