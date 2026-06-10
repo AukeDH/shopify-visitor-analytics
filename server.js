@@ -189,9 +189,14 @@ app.get('/api/analytics/stats', (req, res) => {
 app.get('/api/analytics/sessions', (req, res) => {
   try {
     const store = req.query.store || null, limit = parseInt(req.query.limit) || 200;
+    const device = req.query.device || null;
     const data = purgeOld(loadData());
     let sessions = Object.values(data.sessions);
     if (store && store !== 'all') sessions = sessions.filter(s => s.store && (s.store === store || s.store.includes(store)));
+    if (device && device !== 'all') {
+      const wanted = device === 'pc' ? 'desktop' : device;
+      sessions = sessions.filter(s => s.device === wanted);
+    }
     sessions.sort((a, b) => b.startTime - a.startTime);
     res.json(sessions.slice(0, limit));
   } catch(e) { res.status(200).json([]); }

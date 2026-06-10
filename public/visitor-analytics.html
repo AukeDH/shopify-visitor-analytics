@@ -102,6 +102,15 @@ tr:hover td{background:#1e2330}
     <div id="liveTable"></div>
   </div>
   <div id="tab-sessions" class="tab-content">
+    <div style="margin-bottom:16px;display:flex;align-items:center;gap:8px">
+      <span style="color:#718096;font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em">Device</span>
+      <select id="deviceSelect">
+        <option value="all">All Devices</option>
+        <option value="desktop">PC / Desktop</option>
+        <option value="mobile">Mobile</option>
+        <option value="tablet">Tablet</option>
+      </select>
+    </div>
     <div id="sessionsTable"></div>
   </div>
   <div id="tab-pages" class="tab-content">
@@ -197,7 +206,8 @@ async function loadLive(){
 
 async function loadSessions(){
   try{
-    const r = await fetch(API+'/api/analytics/sessions?store='+getStore()+'&limit=100');
+    const device = document.getElementById('deviceSelect')?.value || 'all';
+    const r = await fetch(API+'/api/analytics/sessions?store='+getStore()+'&limit=100&device='+device);
     const d = await r.json();
     if(!d.length){document.getElementById('sessionsTable').innerHTML='<div class="empty">No sessions yet</div>';return;}
     let html='<table><thead><tr><th>Session ID</th><th>Started</th><th>Device</th><th>Country</th><th>Pages</th><th>Time</th><th>Status</th></tr></thead><tbody>';
@@ -272,6 +282,7 @@ function startTimer(){
 
 document.getElementById('storeSelect').addEventListener('change',()=>{refresh();});
 document.getElementById('daysSelect').addEventListener('change',()=>{loadStats();});
+document.getElementById('deviceSelect').addEventListener('change',()=>{loadSessions();});
 
 refresh();
 loadLive();
